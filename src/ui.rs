@@ -2,11 +2,13 @@ use std::io::{self, Write};
 
 use crossterm::{
     cursor, queue,
-    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor},
+    style::{
+        Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
+    },
     terminal::{self, Clear, ClearType},
 };
 
-use crate::app::{App, ACTIONS};
+use crate::app::{ACTIONS, App};
 
 const PID_W: usize = 8;
 const PROTO_W: usize = 6;
@@ -87,7 +89,7 @@ fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io:
         let line = format_row(
             &e.pid.to_string(),
             &e.process_name,
-            &e.protocol,
+            "TCP",
             &e.address,
             &e.port.to_string(),
             proc_w,
@@ -153,11 +155,7 @@ fn format_row(pid: &str, proc: &str, proto: &str, addr: &str, port: &str, proc_w
 }
 
 fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max {
-        s
-    } else {
-        &s[..max]
-    }
+    if s.len() <= max { s } else { &s[..max] }
 }
 
 fn pad_line(s: &str, width: usize) -> String {
@@ -218,7 +216,11 @@ fn render_action_popup(
     )?;
 
     for (i, action) in ACTIONS.iter().enumerate() {
-        let marker = if i == menu.selected { "\u{25b8} " } else { "  " };
+        let marker = if i == menu.selected {
+            "\u{25b8} "
+        } else {
+            "  "
+        };
         queue!(w, cursor::MoveTo(x as u16, (y + 1 + i) as u16))?;
         if i == menu.selected {
             queue!(

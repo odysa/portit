@@ -5,7 +5,6 @@ pub struct PortEntry {
     pub process_name: String,
     pub port: u16,
     pub address: String,
-    pub protocol: String,
 }
 
 pub fn list_listening_ports() -> Vec<PortEntry> {
@@ -19,11 +18,7 @@ pub fn list_listening_ports() -> Vec<PortEntry> {
     };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut entries: Vec<PortEntry> = stdout
-        .lines()
-        .skip(1)
-        .filter_map(parse_lsof_line)
-        .collect();
+    let mut entries: Vec<PortEntry> = stdout.lines().skip(1).filter_map(parse_lsof_line).collect();
 
     entries.sort_by_key(|e| e.port);
     entries.dedup_by(|a, b| a.pid == b.pid && a.port == b.port);
@@ -31,14 +26,13 @@ pub fn list_listening_ports() -> Vec<PortEntry> {
 }
 
 fn parse_lsof_line(line: &str) -> Option<PortEntry> {
-    let fields: Vec<&str> = line.split_whitespace().collect();
-    if fields.len() < 10 {
-        return None;
-    }
+    let mut fields = line.split_whitespace();
+    let process_name = fields.next()?.to_string();
+    let pid: u32 = fields.next()?.parse().ok()?;
 
-    let process_name = fields[0].to_string();
-    let pid: u32 = fields[1].parse().ok()?;
-    let addr_port = fields[fields.len() - 2];
+    let mut rev = line.split_whitespace().rev();
+    let _listen_state = rev.next()?;
+    let addr_port = rev.next()?;
     let (address, port) = parse_addr_port(addr_port)?;
 
     Some(PortEntry {
@@ -46,16 +40,17 @@ fn parse_lsof_line(line: &str) -> Option<PortEntry> {
         process_name,
         port,
         address,
-        protocol: "TCP".to_string(),
     })
 }
 
 fn parse_addr_port(s: &str) -> Option<(String, u16)> {
     // IPv6: [::1]:3000
-    if let Some(i) = s.rfind("]:") {
-        let addr = s[1..i].to_string();
-        let port = s[i + 2..].parse().ok()?;
-        return Some((addr, port));
+    if s.starts_with('[') {
+        if let Some(i) = s.rfind("]:") {
+            let addr = s[1..i].to_string();
+            let port = s[i + 2..].parse().ok()?;
+            return Some((addr, port));
+        }
     }
     // IPv4 or wildcard: 127.0.0.1:80, *:3000
     let colon = s.rfind(':')?;
