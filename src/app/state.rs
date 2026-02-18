@@ -1,29 +1,21 @@
 use crate::ports::{self, PortEntry};
 
-use super::App;
+use super::{App, cycle_index};
 
 impl App {
     pub(super) fn next_row(&mut self) {
-        if self.filtered_entries.is_empty() {
-            return;
-        }
-        self.selected = if self.selected >= self.filtered_entries.len() - 1 {
-            0
-        } else {
-            self.selected + 1
-        };
-        self.ensure_visible();
+        self.move_selection(1);
     }
 
     pub(super) fn prev_row(&mut self) {
+        self.move_selection(-1);
+    }
+
+    fn move_selection(&mut self, step: isize) {
         if self.filtered_entries.is_empty() {
             return;
         }
-        self.selected = if self.selected == 0 {
-            self.filtered_entries.len() - 1
-        } else {
-            self.selected - 1
-        };
+        self.selected = cycle_index(self.selected, self.filtered_entries.len(), step);
         self.ensure_visible();
     }
 

@@ -90,3 +90,10 @@ impl App {
         Ok(())
     }
 }
+
+fn cycle_index(current: usize, len: usize, step: isize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    ((current as isize + step).rem_euclid(len as isize)) as usize
+}
