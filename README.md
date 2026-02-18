@@ -1,85 +1,78 @@
 # portit
 
-`portit` is a small terminal UI for listing listening TCP ports and killing the owning process.
+`portit` is a terminal UI for viewing listening TCP ports and stopping the process that owns them.
 
-## Features
+## What it does
 
-- Lists listening TCP ports from `lsof`
-- Shows PID, process name, address, and port
-- Filter by process name or port (`/`)
-- Kill selected process with `SIGTERM` or `SIGKILL`
+- Reads listening sockets with `lsof -iTCP -sTCP:LISTEN -P -n`
+- Shows `PID`, process name, protocol, address, and port
+- Lets you filter by process name or port substring
+- Sends `SIGTERM` or `SIGKILL` to the selected PID
 
 ## Requirements
 
 - macOS or Linux
-- `lsof` available in `PATH`
-- `kill` available in `PATH`
+- `lsof` in `PATH`
+- `kill` in `PATH`
+- Terminal width of at least 40 columns
 
-## Run from source
+## Quick start
 
 ```bash
 cargo run --release
 ```
 
-## Keybindings
+`portit` opens in raw terminal mode and restores your terminal when you quit.
+
+## Controls
+
+### Main view
 
 - `q` or `Esc`: quit
-- `j` / `k` or arrow keys: move selection
+- `j` / `Down`: next row
+- `k` / `Up`: previous row
 - `Enter`: open action menu
-- `/`: filter mode
-- `K`: kill (`SIGTERM`)
-- `F`: force kill (`SIGKILL`)
-- `r`: refresh
+- `/`: enter filter mode
+- `K`: request `SIGTERM` for selected process
+- `F`: request `SIGKILL` for selected process
+- `r`: refresh from `lsof`
 
-## Install
+### Action menu
 
-### Cargo (after publishing to crates.io)
+- `j` / `Down`: next action
+- `k` / `Up`: previous action
+- `Enter`: confirm selected action
+- `Esc` or `q`: close menu
 
-```bash
-cargo install portit
-```
+### Kill confirmation popup
 
-### Homebrew (after creating a tap)
+- `y` or `Y`: send signal
+- Any other key: cancel
 
-```bash
-brew tap <you>/tap
-brew install portit
-```
+### Filter mode
 
-## Publish to crates.io
+- Type: edit query
+- `Backspace`: delete character
+- `Enter`: apply filter
+- `Esc`: clear filter and return
 
-1. Add package metadata in `Cargo.toml`:
-   - `description`
-   - `license`
-   - `repository`
-   - `readme = "README.md"`
-2. Run:
+## Filtering behavior
+
+- Case-insensitive match on process name
+- String match on port number (for example, `30` matches `3000` and `8080`)
+- Filtering is applied when you press `Enter` in filter mode
+
+## Manual
+
+For full operational details, see `MANUAL.md`.
+
+## Development
 
 ```bash
 cargo test
-cargo package
-cargo publish --dry-run
 ```
 
-3. Login and publish:
+## Packaging notes
 
-```bash
-cargo login <CRATES_IO_TOKEN>
-cargo publish
-```
-
-## Publish to Homebrew (tap formula)
-
-1. Create a Git tag and GitHub release (example: `v0.1.0`)
-2. In your tap repo, add `Formula/portit.rb`
-3. Use release tarball URL and SHA256 in formula
-4. Test locally:
-
-```bash
-brew install --build-from-source ./Formula/portit.rb
-brew test portit
-```
-
-## License
-
-Add a `LICENSE` file (for example MIT) before publishing.
+- Crates.io/Homebrew sections were intentionally removed from this quick-start README.
+- Keep release and distribution docs in a separate release guide if needed.
