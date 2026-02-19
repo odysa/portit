@@ -15,6 +15,8 @@ const PROTO_W: usize = 6;
 const ADDR_W: usize = 18;
 const PORT_W: usize = 6;
 const FIXED_W: usize = PID_W + PROTO_W + ADDR_W + PORT_W + 5;
+const FILTER_HELP: &str = " Type to filter \u{00b7} Enter to apply \u{00b7} Esc to cancel";
+const MAIN_HELP: &str = " q quit \u{00b7} j/k nav \u{00b7} Enter select \u{00b7} / filter \u{00b7} K kill \u{00b7} F force \u{00b7} r refresh";
 
 pub fn render(w: &mut impl Write, app: &App) -> io::Result<()> {
     let (cols, _) = terminal::size()?;
@@ -95,19 +97,7 @@ fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io:
             proc_w,
         );
 
-        queue!(w, Clear(ClearType::CurrentLine))?;
-        if i == app.selected {
-            queue!(
-                w,
-                SetAttribute(Attribute::Reverse),
-                Print(pad_line(&line, cols)),
-                SetAttribute(Attribute::Reset),
-                ResetColor,
-            )?;
-        } else {
-            queue!(w, Print(pad_line(&line, cols)))?;
-        }
-        queue!(w, cursor::MoveToNextLine(1))?;
+        render_row_line(w, cols, &line, i == app.selected)?;
     }
 
     // clear leftover rows if entries < visible
@@ -121,25 +111,12 @@ fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io:
 fn render_footer(w: &mut impl Write, cols: usize, app: &App) -> io::Result<()> {
     queue!(w, Clear(ClearType::CurrentLine))?;
 
-    if app.filter_mode {
-        let text = " Type to filter \u{00b7} Enter to apply \u{00b7} Esc to cancel";
-        queue!(
-            w,
-            SetForegroundColor(Color::DarkGrey),
-            SetBackgroundColor(Color::Black),
-            Print(pad_line(text, cols)),
-            ResetColor,
-        )
+    let text = if app.filter_mode {
+        FILTER_HELP
     } else {
-        let text = " q quit \u{00b7} j/k nav \u{00b7} Enter select \u{00b7} / filter \u{00b7} K kill \u{00b7} F force \u{00b7} r refresh";
-        queue!(
-            w,
-            SetForegroundColor(Color::DarkGrey),
-            SetBackgroundColor(Color::Black),
-            Print(pad_line(text, cols)),
-            ResetColor,
-        )
-    }
+        MAIN_HELP
+    };
+    render_status_line(w, cols, text)
 }
 
 fn format_row(pid: &str, proc: &str, proto: &str, addr: &str, port: &str, proc_w: usize) -> String {
@@ -166,6 +143,54 @@ fn pad_line(s: &str, width: usize) -> String {
     }
 }
 
+fn render_row_line(w: &mut impl Write, cols: usize, line: &str, selected: bool) -> io::Result<()> {
+    queue!(w, Clear(ClearType::CurrentLine))?;
+    if selected {
+        queue!(
+            w,
+            SetAttribute(Attribute::Reverse),
+            Print(pad_line(line, cols)),
+            SetAttribute(Attribute::Reset),
+            ResetColor,
+        )?;
+    } else {
+        queue!(w, Print(pad_line(line, cols)))?;
+    }
+    queue!(w, cursor::MoveToNextLine(1))
+}
+
+fn render_status_line(w: &mut impl Write, cols: usize, text: &str) -> io::Result<()> {
+    queue!(
+        w,
+        SetForegroundColor(Color::DarkGrey),
+        SetBackgroundColor(Color::Black),
+        Print(pad_line(text, cols)),
+        ResetColor,
+    )
+}
+
+struct PopupLayout {
+    x: u16,
+    y: u16,
+    h_bar: String,
+}
+
+fn popup_layout(cols: usize, sel_y: usize, inner_w: usize) -> PopupLayout {
+    PopupLayout {
+        x: (cols.saturating_sub(inner_w + 2) / 2) as u16,
+        y: (sel_y + 1) as u16,
+        h_bar: "\u{2500}".repeat(inner_w),
+    }
+}
+
+fn popup_top(h_bar: &str) -> String {
+    format!("\u{250c}{h_bar}\u{2510}")
+}
+
+fn popup_bottom(h_bar: &str) -> String {
+    format!("\u{2514}{h_bar}\u{2518}")
+}
+
 fn render_confirm_popup(
     w: &mut impl Write,
     cols: usize,
@@ -176,21 +201,18 @@ fn render_confirm_popup(
 ) -> io::Result<()> {
     let sig = if force { "SIGKILL" } else { "SIGTERM" };
     let msg = format!(" Kill {} (PID {}) with {}? [y/n] ", name, pid, sig);
-    let inner_w = msg.len();
-    let h_bar: String = "\u{2500}".repeat(inner_w);
-    let x = cols.saturating_sub(inner_w + 2) / 2;
-    let y = sel_y + 1;
+    let layout = popup_layout(cols, sel_y, msg.len());
 
     queue!(
         w,
-        cursor::MoveTo(x as u16, y as u16),
+        cursor::MoveTo(layout.x, layout.y),
         SetForegroundColor(Color::White),
         SetBackgroundColor(Color::Red),
-        Print(format!("\u{250c}{h_bar}\u{2510}")),
-        cursor::MoveTo(x as u16, (y + 1) as u16),
+        Print(popup_top(&layout.h_bar)),
+        cursor::MoveTo(layout.x, layout.y + 1),
         Print(format!("\u{2502}{msg}\u{2502}")),
-        cursor::MoveTo(x as u16, (y + 2) as u16),
-        Print(format!("\u{2514}{h_bar}\u{2518}")),
+        cursor::MoveTo(layout.x, layout.y + 2),
+        Print(popup_bottom(&layout.h_bar)),
         ResetColor,
         SetAttribute(Attribute::Reset),
     )
@@ -203,16 +225,14 @@ fn render_action_popup(
     menu: &crate::app::ActionMenu,
 ) -> io::Result<()> {
     let inner_w = ACTIONS.iter().map(|a| a.len() + 4).max().unwrap_or(16);
-    let h_bar: String = "\u{2500}".repeat(inner_w);
-    let x = cols.saturating_sub(inner_w + 2) / 2;
-    let y = sel_y + 1;
+    let layout = popup_layout(cols, sel_y, inner_w);
 
     queue!(
         w,
-        cursor::MoveTo(x as u16, y as u16),
+        cursor::MoveTo(layout.x, layout.y),
         SetForegroundColor(Color::Cyan),
         SetBackgroundColor(Color::Black),
-        Print(format!("\u{250c}{h_bar}\u{2510}")),
+        Print(popup_top(&layout.h_bar)),
     )?;
 
     for (i, action) in ACTIONS.iter().enumerate() {
@@ -221,7 +241,7 @@ fn render_action_popup(
         } else {
             "  "
         };
-        queue!(w, cursor::MoveTo(x as u16, (y + 1 + i) as u16))?;
+        queue!(w, cursor::MoveTo(layout.x, layout.y + 1 + i as u16))?;
         if i == menu.selected {
             queue!(
                 w,
@@ -247,8 +267,8 @@ fn render_action_popup(
 
     queue!(
         w,
-        cursor::MoveTo(x as u16, (y + 1 + ACTIONS.len()) as u16),
-        Print(format!("\u{2514}{h_bar}\u{2518}")),
+        cursor::MoveTo(layout.x, layout.y + 1 + ACTIONS.len() as u16),
+        Print(popup_bottom(&layout.h_bar)),
         ResetColor,
         SetAttribute(Attribute::Reset),
     )

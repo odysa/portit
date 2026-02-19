@@ -2,7 +2,7 @@ use crossterm::event::KeyCode;
 
 use crate::ports;
 
-use super::{ACTIONS, ActionMenu, App};
+use super::{ACTIONS, ActionMenu, App, cycle_index};
 
 impl App {
     pub(super) fn handle_key(&mut self, code: KeyCode) {
@@ -36,16 +36,8 @@ impl App {
 
     fn handle_action_menu(&mut self, code: KeyCode) {
         match code {
-            KeyCode::Char('j') | KeyCode::Down => {
-                if let Some(menu) = &mut self.action_menu {
-                    menu.selected = (menu.selected + 1) % ACTIONS.len();
-                }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                if let Some(menu) = &mut self.action_menu {
-                    menu.selected = (menu.selected + ACTIONS.len() - 1) % ACTIONS.len();
-                }
-            }
+            KeyCode::Char('j') | KeyCode::Down => self.move_action_selection(1),
+            KeyCode::Char('k') | KeyCode::Up => self.move_action_selection(-1),
             KeyCode::Enter => {
                 if let Some(menu) = self.action_menu.take() {
                     self.confirm_kill = Some((menu.pid, menu.name));
@@ -56,6 +48,12 @@ impl App {
                 self.action_menu = None;
             }
             _ => {}
+        }
+    }
+
+    fn move_action_selection(&mut self, step: isize) {
+        if let Some(menu) = &mut self.action_menu {
+            menu.selected = cycle_index(menu.selected, ACTIONS.len(), step);
         }
     }
 
