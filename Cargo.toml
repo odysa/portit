@@ -1,0 +1,18 @@
+[package]
+name = "portit"
+version = "0.1.0"
+edition = "2024"
+description = "A minimal TUI for inspecting listening TCP ports and killing processes."
+license = "MIT"
+repository = "https://github.com/odysa/portit"
+readme = "README.md"
+
+[dependencies]
+crossterm = { version = "0.28", default-features = false, features = ["events"] }
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+strip = true
+codegen-units = 1
+panic = "abort"
