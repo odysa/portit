@@ -82,11 +82,11 @@ fn fetch_commands(entries: &mut [PortEntry]) {
         let pid_str = entry.pid.to_string();
         for line in &lines {
             let trimmed = line.trim_start();
-            if let Some(rest) = trimmed.strip_prefix(&pid_str) {
-                if rest.starts_with(char::is_whitespace) {
-                    entry.command = rest.trim_start().to_string();
-                    break;
-                }
+            if let Some(rest) = trimmed.strip_prefix(&pid_str)
+                && rest.starts_with(char::is_whitespace)
+            {
+                entry.command = rest.trim_start().to_string();
+                break;
             }
         }
     }
