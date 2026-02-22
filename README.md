@@ -2,6 +2,8 @@
 
 `portit` is a small terminal UI for listing listening TCP ports and killing the owning process.
 
+**~379KB** release binary. Single dependency (`crossterm`). No runtime overhead.
+
 ![demo](static/demo.gif)
 
 ## Features
