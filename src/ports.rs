@@ -69,25 +69,31 @@ fn fetch_commands(entries: &mut [PortEntry]) {
     }
 
     let pids: Vec<String> = entries.iter().map(|e| e.pid.to_string()).collect();
-    let output = Command::new("ps")
+    let Ok(output) = Command::new("ps")
         .args(["-ww", "-p", &pids.join(","), "-o", "pid=,command="])
         .output()
-        .ok();
+    else {
+        return;
+    };
 
-    let Some(output) = output else { return };
+    if !output.status.success() {
+        return;
+    }
+
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    let lines: Vec<&str> = stdout.lines().collect();
+    let mut cmd_map = std::collections::HashMap::new();
+    for line in stdout.lines() {
+        let trimmed = line.trim_start();
+        if let Some((pid_str, cmd)) = trimmed.split_once(char::is_whitespace)
+            && let Ok(pid) = pid_str.parse::<u32>()
+        {
+            cmd_map.insert(pid, cmd.trim_start().to_string());
+        }
+    }
     for entry in entries.iter_mut() {
-        let pid_str = entry.pid.to_string();
-        for line in &lines {
-            let trimmed = line.trim_start();
-            if let Some(rest) = trimmed.strip_prefix(&pid_str)
-                && rest.starts_with(char::is_whitespace)
-            {
-                entry.command = rest.trim_start().to_string();
-                break;
-            }
+        if let Some(cmd) = cmd_map.remove(&entry.pid) {
+            entry.command = cmd;
         }
     }
 }

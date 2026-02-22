@@ -128,13 +128,13 @@ fn format_row(
     cmd_w: usize,
 ) -> String {
     format!(
-        " {:<PID_W$}{:<PROC_W$}{:<PROTO_W$}{:<ADDR_W$}{:<PORT_W$}{:<cw$}",
-        truncate(pid, PID_W),
-        truncate(proc, PROC_W),
-        truncate(proto, PROTO_W),
-        truncate(addr, ADDR_W),
-        truncate(port, PORT_W),
-        truncate(cmd, cmd_w),
+        " {pid:<PID_W$}{proc:<PROC_W$}{proto:<PROTO_W$}{addr:<ADDR_W$}{port:<PORT_W$}{cmd:<cw$}",
+        pid = truncate(pid, PID_W),
+        proc = truncate(proc, PROC_W),
+        proto = truncate(proto, PROTO_W),
+        addr = truncate(addr, ADDR_W),
+        port = truncate(port, PORT_W),
+        cmd = truncate(cmd, cmd_w),
         cw = cmd_w,
     )
 }
