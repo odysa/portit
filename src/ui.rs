@@ -11,10 +11,11 @@ use crossterm::{
 use crate::app::{ACTIONS, ActionMenu, App};
 
 const PID_W: usize = 8;
+const PROC_W: usize = 14;
 const PROTO_W: usize = 6;
 const ADDR_W: usize = 18;
 const PORT_W: usize = 6;
-const FIXED_W: usize = PID_W + PROTO_W + ADDR_W + PORT_W + 5;
+const FIXED_W: usize = 1 + PID_W + PROC_W + PROTO_W + ADDR_W + PORT_W;
 const FILTER_HELP: &str = " Type to filter \u{00b7} Enter to apply \u{00b7} Esc to cancel";
 const MAIN_HELP: &str = " q quit \u{00b7} j/k nav \u{00b7} Enter select \u{00b7} / filter \u{00b7} K kill \u{00b7} F force \u{00b7} r refresh";
 
@@ -26,13 +27,13 @@ pub fn render(w: &mut impl Write, app: &App) -> io::Result<()> {
         return Ok(());
     }
 
-    let proc_w = cols.saturating_sub(FIXED_W).max(8);
+    let cmd_w = cols.saturating_sub(FIXED_W).max(8);
 
     queue!(w, cursor::MoveTo(0, app.start_row))?;
 
     render_header(w, cols, app)?;
-    render_col_headers(w, cols, proc_w)?;
-    render_rows(w, cols, proc_w, app)?;
+    render_col_headers(w, cols, cmd_w)?;
+    render_rows(w, cols, cmd_w, app)?;
     render_footer(w, cols, app)?;
 
     let sel_y = app.start_row as usize + 2 + app.selected - app.scroll_offset;
@@ -68,8 +69,8 @@ fn render_header(w: &mut impl Write, cols: usize, app: &App) -> io::Result<()> {
     )
 }
 
-fn render_col_headers(w: &mut impl Write, cols: usize, proc_w: usize) -> io::Result<()> {
-    let line = format_row("PID", "Process", "Proto", "Address", "Port", proc_w);
+fn render_col_headers(w: &mut impl Write, cols: usize, cmd_w: usize) -> io::Result<()> {
+    let line = format_row("PID", "Process", "Proto", "Address", "Port", "Command", cmd_w);
 
     queue!(
         w,
@@ -83,7 +84,7 @@ fn render_col_headers(w: &mut impl Write, cols: usize, proc_w: usize) -> io::Res
     )
 }
 
-fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io::Result<()> {
+fn render_rows(w: &mut impl Write, cols: usize, cmd_w: usize, app: &App) -> io::Result<()> {
     let visible = app.visible_rows;
     let end = (app.scroll_offset + visible).min(app.filtered_entries.len());
 
@@ -96,7 +97,8 @@ fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io:
             "TCP",
             &e.address,
             &e.port.to_string(),
-            proc_w,
+            &e.command,
+            cmd_w,
         );
 
         render_row_line(w, cols, &line, i == app.selected)?;
@@ -116,15 +118,24 @@ fn render_footer(w: &mut impl Write, cols: usize, app: &App) -> io::Result<()> {
     render_status_line(w, cols, text)
 }
 
-fn format_row(pid: &str, proc: &str, proto: &str, addr: &str, port: &str, proc_w: usize) -> String {
+fn format_row(
+    pid: &str,
+    proc: &str,
+    proto: &str,
+    addr: &str,
+    port: &str,
+    cmd: &str,
+    cmd_w: usize,
+) -> String {
     format!(
-        " {:<PID_W$}{:<pw$}{:<PROTO_W$}{:<ADDR_W$}{:<PORT_W$}",
+        " {:<PID_W$}{:<PROC_W$}{:<PROTO_W$}{:<ADDR_W$}{:<PORT_W$}{:<cw$}",
         truncate(pid, PID_W),
-        truncate(proc, proc_w),
+        truncate(proc, PROC_W),
         truncate(proto, PROTO_W),
         truncate(addr, ADDR_W),
         truncate(port, PORT_W),
-        pw = proc_w,
+        truncate(cmd, cmd_w),
+        cw = cmd_w,
     )
 }
 
@@ -262,19 +273,20 @@ mod tests {
 
     #[test]
     fn format_row_basic() {
-        let row = format_row("1234", "node", "TCP", "127.0.0.1", "3000", 12);
+        let row = format_row("1234", "node", "TCP", "127.0.0.1", "3000", "/usr/bin/node app.js", 24);
         assert!(row.contains("1234"));
         assert!(row.contains("node"));
         assert!(row.contains("TCP"));
         assert!(row.contains("127.0.0.1"));
         assert!(row.contains("3000"));
+        assert!(row.contains("/usr/bin/node app.js"));
     }
 
     #[test]
-    fn format_row_truncates_long_process() {
-        let row = format_row("1", "a]very_long_process_name_here", "TCP", "0.0.0.0", "80", 8);
-        // proc_w=8, so process name should be truncated
-        assert!(!row.contains("a]very_long_process_name_here"));
+    fn format_row_truncates_long_command() {
+        let row = format_row("1", "node", "TCP", "0.0.0.0", "80", "/a/very/long/command/path", 8);
+        // cmd_w=8, so command should be truncated
+        assert!(!row.contains("/a/very/long/command/path"));
     }
 
     #[test]
