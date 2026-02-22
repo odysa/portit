@@ -129,16 +129,16 @@ fn format_row(pid: &str, proc: &str, proto: &str, addr: &str, port: &str, proc_w
 }
 
 fn truncate(s: &str, max: usize) -> &str {
-    match s.char_indices().nth(max) {
-        Some((i, _)) => &s[..i],
-        None => s,
+    if s.len() <= max {
+        s
+    } else {
+        &s[..max]
     }
 }
 
 fn pad_line(s: &str, width: usize) -> String {
-    let char_count = s.chars().count();
-    if char_count >= width {
-        truncate(s, width).to_string()
+    if s.len() >= width {
+        s[..width].to_string()
     } else {
         format!("{s:<width$}")
     }
@@ -217,6 +217,87 @@ fn render_confirm_popup(
         ResetColor,
         SetAttribute(Attribute::Reset),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_short_string() {
+        assert_eq!(truncate("abc", 5), "abc");
+    }
+
+    #[test]
+    fn truncate_exact_length() {
+        assert_eq!(truncate("abcde", 5), "abcde");
+    }
+
+    #[test]
+    fn truncate_long_string() {
+        assert_eq!(truncate("abcdefgh", 5), "abcde");
+    }
+
+    #[test]
+    fn truncate_empty() {
+        assert_eq!(truncate("", 5), "");
+    }
+
+    #[test]
+    fn pad_line_shorter() {
+        let result = pad_line("hi", 5);
+        assert_eq!(result, "hi   ");
+        assert_eq!(result.len(), 5);
+    }
+
+    #[test]
+    fn pad_line_exact() {
+        assert_eq!(pad_line("hello", 5), "hello");
+    }
+
+    #[test]
+    fn pad_line_longer() {
+        assert_eq!(pad_line("hello world", 5), "hello");
+    }
+
+    #[test]
+    fn format_row_basic() {
+        let row = format_row("1234", "node", "TCP", "127.0.0.1", "3000", 12);
+        assert!(row.contains("1234"));
+        assert!(row.contains("node"));
+        assert!(row.contains("TCP"));
+        assert!(row.contains("127.0.0.1"));
+        assert!(row.contains("3000"));
+    }
+
+    #[test]
+    fn format_row_truncates_long_process() {
+        let row = format_row("1", "a]very_long_process_name_here", "TCP", "0.0.0.0", "80", 8);
+        // proc_w=8, so process name should be truncated
+        assert!(!row.contains("a]very_long_process_name_here"));
+    }
+
+    #[test]
+    fn popup_layout_centers() {
+        let layout = popup_layout(80, 5, 20);
+        // (80 - 22) / 2 = 29
+        assert_eq!(layout.x, 29);
+        assert_eq!(layout.y, 6);
+        assert_eq!(layout.h_bar.chars().count(), 20);
+    }
+
+    #[test]
+    fn popup_layout_narrow_terminal() {
+        let layout = popup_layout(10, 0, 20);
+        assert_eq!(layout.x, 0); // saturating_sub prevents underflow
+    }
+
+    #[test]
+    fn popup_borders() {
+        let bar = "\u{2500}\u{2500}\u{2500}";
+        assert_eq!(popup_top(bar), "\u{250c}\u{2500}\u{2500}\u{2500}\u{2510}");
+        assert_eq!(popup_bottom(bar), "\u{2514}\u{2500}\u{2500}\u{2500}\u{2518}");
+    }
 }
 
 fn render_action_popup(

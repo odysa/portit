@@ -23,12 +23,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: ${{ matrix.target }}
+          components: rust-src
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          RUSTFLAGS="-Zunstable-options -Cpanic=immediate-abort" \
+          cargo build --release --target ${{ matrix.target }} \
+            -Z build-std=std,panic_abort
 
       - name: Package
         run: |
