@@ -126,6 +126,7 @@ mod tests {
                 process_name: format!("proc{}", i),
                 port: 3000 + i as u16,
                 address: "127.0.0.1".to_string(),
+                command: format!("/usr/bin/proc{}", i),
             })
             .collect();
         let filtered_entries: Vec<usize> = (0..n).collect();

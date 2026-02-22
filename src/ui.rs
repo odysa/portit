@@ -11,10 +11,11 @@ use crossterm::{
 use crate::app::{ACTIONS, ActionMenu, App};
 
 const PID_W: usize = 8;
+const PROC_W: usize = 14;
 const PROTO_W: usize = 6;
 const ADDR_W: usize = 18;
 const PORT_W: usize = 6;
-const FIXED_W: usize = PID_W + PROTO_W + ADDR_W + PORT_W + 5;
+const FIXED_W: usize = 1 + PID_W + PROC_W + PROTO_W + ADDR_W + PORT_W;
 const FILTER_HELP: &str = " Type to filter \u{00b7} Enter to apply \u{00b7} Esc to cancel";
 const MAIN_HELP: &str = " q quit \u{00b7} j/k nav \u{00b7} Enter select \u{00b7} / filter \u{00b7} K kill \u{00b7} F force \u{00b7} r refresh";
 
@@ -22,17 +23,17 @@ pub fn render(w: &mut impl Write, app: &App) -> io::Result<()> {
     let (cols, _) = terminal::size()?;
     let cols = cols as usize;
 
-    if cols < 40 {
+    if cols < FIXED_W + 8 {
         return Ok(());
     }
 
-    let proc_w = cols.saturating_sub(FIXED_W).max(8);
+    let cmd_w = cols.saturating_sub(FIXED_W).max(8);
 
     queue!(w, cursor::MoveTo(0, app.start_row))?;
 
     render_header(w, cols, app)?;
-    render_col_headers(w, cols, proc_w)?;
-    render_rows(w, cols, proc_w, app)?;
+    render_col_headers(w, cols, cmd_w)?;
+    render_rows(w, cols, cmd_w, app)?;
     render_footer(w, cols, app)?;
 
     let sel_y = app.start_row as usize + 2 + app.selected - app.scroll_offset;
@@ -68,8 +69,8 @@ fn render_header(w: &mut impl Write, cols: usize, app: &App) -> io::Result<()> {
     )
 }
 
-fn render_col_headers(w: &mut impl Write, cols: usize, proc_w: usize) -> io::Result<()> {
-    let line = format_row("PID", "Process", "Proto", "Address", "Port", proc_w);
+fn render_col_headers(w: &mut impl Write, cols: usize, cmd_w: usize) -> io::Result<()> {
+    let line = format_row("PID", "Process", "Proto", "Address", "Port", "Command", cmd_w);
 
     queue!(
         w,
@@ -83,7 +84,7 @@ fn render_col_headers(w: &mut impl Write, cols: usize, proc_w: usize) -> io::Res
     )
 }
 
-fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io::Result<()> {
+fn render_rows(w: &mut impl Write, cols: usize, cmd_w: usize, app: &App) -> io::Result<()> {
     let visible = app.visible_rows;
     let end = (app.scroll_offset + visible).min(app.filtered_entries.len());
 
@@ -96,7 +97,8 @@ fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io:
             "TCP",
             &e.address,
             &e.port.to_string(),
-            proc_w,
+            &e.command,
+            cmd_w,
         );
 
         render_row_line(w, cols, &line, i == app.selected)?;
@@ -116,15 +118,24 @@ fn render_footer(w: &mut impl Write, cols: usize, app: &App) -> io::Result<()> {
     render_status_line(w, cols, text)
 }
 
-fn format_row(pid: &str, proc: &str, proto: &str, addr: &str, port: &str, proc_w: usize) -> String {
+fn format_row(
+    pid: &str,
+    proc: &str,
+    proto: &str,
+    addr: &str,
+    port: &str,
+    cmd: &str,
+    cmd_w: usize,
+) -> String {
     format!(
-        " {:<PID_W$}{:<pw$}{:<PROTO_W$}{:<ADDR_W$}{:<PORT_W$}",
-        truncate(pid, PID_W),
-        truncate(proc, proc_w),
-        truncate(proto, PROTO_W),
-        truncate(addr, ADDR_W),
-        truncate(port, PORT_W),
-        pw = proc_w,
+        " {pid:<PID_W$}{proc:<PROC_W$}{proto:<PROTO_W$}{addr:<ADDR_W$}{port:<PORT_W$}{cmd:<cw$}",
+        pid = truncate(pid, PID_W),
+        proc = truncate(proc, PROC_W),
+        proto = truncate(proto, PROTO_W),
+        addr = truncate(addr, ADDR_W),
+        port = truncate(port, PORT_W),
+        cmd = truncate(cmd, cmd_w),
+        cw = cmd_w,
     )
 }
 
@@ -152,7 +163,6 @@ fn render_row_line(w: &mut impl Write, cols: usize, line: &str, selected: bool) 
             SetAttribute(Attribute::Reverse),
             Print(pad_line(line, cols)),
             SetAttribute(Attribute::Reset),
-            ResetColor,
         )?;
     } else {
         queue!(w, Print(pad_line(line, cols)))?;
@@ -214,90 +224,8 @@ fn render_confirm_popup(
         Print(format!("\u{2502}{msg}\u{2502}")),
         cursor::MoveTo(layout.x, layout.y + 2),
         Print(popup_bottom(&layout.h_bar)),
-        ResetColor,
         SetAttribute(Attribute::Reset),
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn truncate_short_string() {
-        assert_eq!(truncate("abc", 5), "abc");
-    }
-
-    #[test]
-    fn truncate_exact_length() {
-        assert_eq!(truncate("abcde", 5), "abcde");
-    }
-
-    #[test]
-    fn truncate_long_string() {
-        assert_eq!(truncate("abcdefgh", 5), "abcde");
-    }
-
-    #[test]
-    fn truncate_empty() {
-        assert_eq!(truncate("", 5), "");
-    }
-
-    #[test]
-    fn pad_line_shorter() {
-        let result = pad_line("hi", 5);
-        assert_eq!(result, "hi   ");
-        assert_eq!(result.len(), 5);
-    }
-
-    #[test]
-    fn pad_line_exact() {
-        assert_eq!(pad_line("hello", 5), "hello");
-    }
-
-    #[test]
-    fn pad_line_longer() {
-        assert_eq!(pad_line("hello world", 5), "hello");
-    }
-
-    #[test]
-    fn format_row_basic() {
-        let row = format_row("1234", "node", "TCP", "127.0.0.1", "3000", 12);
-        assert!(row.contains("1234"));
-        assert!(row.contains("node"));
-        assert!(row.contains("TCP"));
-        assert!(row.contains("127.0.0.1"));
-        assert!(row.contains("3000"));
-    }
-
-    #[test]
-    fn format_row_truncates_long_process() {
-        let row = format_row("1", "a]very_long_process_name_here", "TCP", "0.0.0.0", "80", 8);
-        // proc_w=8, so process name should be truncated
-        assert!(!row.contains("a]very_long_process_name_here"));
-    }
-
-    #[test]
-    fn popup_layout_centers() {
-        let layout = popup_layout(80, 5, 20);
-        // (80 - 22) / 2 = 29
-        assert_eq!(layout.x, 29);
-        assert_eq!(layout.y, 6);
-        assert_eq!(layout.h_bar.chars().count(), 20);
-    }
-
-    #[test]
-    fn popup_layout_narrow_terminal() {
-        let layout = popup_layout(10, 0, 20);
-        assert_eq!(layout.x, 0); // saturating_sub prevents underflow
-    }
-
-    #[test]
-    fn popup_borders() {
-        let bar = "\u{2500}\u{2500}\u{2500}";
-        assert_eq!(popup_top(bar), "\u{250c}\u{2500}\u{2500}\u{2500}\u{2510}");
-        assert_eq!(popup_bottom(bar), "\u{2514}\u{2500}\u{2500}\u{2500}\u{2518}");
-    }
 }
 
 fn render_action_popup(
@@ -351,7 +279,88 @@ fn render_action_popup(
         w,
         cursor::MoveTo(layout.x, layout.y + 1 + ACTIONS.len() as u16),
         Print(popup_bottom(&layout.h_bar)),
-        ResetColor,
         SetAttribute(Attribute::Reset),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_short_string() {
+        assert_eq!(truncate("abc", 5), "abc");
+    }
+
+    #[test]
+    fn truncate_exact_length() {
+        assert_eq!(truncate("abcde", 5), "abcde");
+    }
+
+    #[test]
+    fn truncate_long_string() {
+        assert_eq!(truncate("abcdefgh", 5), "abcde");
+    }
+
+    #[test]
+    fn truncate_empty() {
+        assert_eq!(truncate("", 5), "");
+    }
+
+    #[test]
+    fn pad_line_shorter() {
+        let result = pad_line("hi", 5);
+        assert_eq!(result, "hi   ");
+        assert_eq!(result.len(), 5);
+    }
+
+    #[test]
+    fn pad_line_exact() {
+        assert_eq!(pad_line("hello", 5), "hello");
+    }
+
+    #[test]
+    fn pad_line_longer() {
+        assert_eq!(pad_line("hello world", 5), "hello");
+    }
+
+    #[test]
+    fn format_row_basic() {
+        let row = format_row("1234", "node", "TCP", "127.0.0.1", "3000", "/usr/bin/node app.js", 24);
+        assert!(row.contains("1234"));
+        assert!(row.contains("node"));
+        assert!(row.contains("TCP"));
+        assert!(row.contains("127.0.0.1"));
+        assert!(row.contains("3000"));
+        assert!(row.contains("/usr/bin/node app.js"));
+    }
+
+    #[test]
+    fn format_row_truncates_long_command() {
+        let row = format_row("1", "node", "TCP", "0.0.0.0", "80", "/a/very/long/command/path", 8);
+        // cmd_w=8, so command should be truncated
+        assert!(!row.contains("/a/very/long/command/path"));
+    }
+
+    #[test]
+    fn popup_layout_centers() {
+        let layout = popup_layout(80, 5, 20);
+        // (80 - 22) / 2 = 29
+        assert_eq!(layout.x, 29);
+        assert_eq!(layout.y, 6);
+        assert_eq!(layout.h_bar.chars().count(), 20);
+    }
+
+    #[test]
+    fn popup_layout_narrow_terminal() {
+        let layout = popup_layout(10, 0, 20);
+        assert_eq!(layout.x, 0); // saturating_sub prevents underflow
+    }
+
+    #[test]
+    fn popup_borders() {
+        let bar = "\u{2500}\u{2500}\u{2500}";
+        assert_eq!(popup_top(bar), "\u{250c}\u{2500}\u{2500}\u{2500}\u{2510}");
+        assert_eq!(popup_bottom(bar), "\u{2514}\u{2500}\u{2500}\u{2500}\u{2518}");
+    }
 }

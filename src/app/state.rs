@@ -53,6 +53,7 @@ impl App {
                 .filter(|(_, e)| {
                     e.process_name.to_ascii_lowercase().contains(&query)
                         || e.port.to_string().contains(&query)
+                        || e.command.to_ascii_lowercase().contains(&query)
                 })
                 .map(|(i, _)| i)
                 .collect()

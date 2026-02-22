@@ -5,6 +5,7 @@ pub struct PortEntry {
     pub process_name: String,
     pub port: u16,
     pub address: String,
+    pub command: String,
 }
 
 pub fn list_listening_ports() -> Vec<PortEntry> {
@@ -23,6 +24,7 @@ pub fn list_listening_ports() -> Vec<PortEntry> {
     entries.sort_by_key(|e| (e.pid, e.port));
     entries.dedup_by(|a, b| a.pid == b.pid && a.port == b.port);
     entries.sort_by_key(|e| e.port);
+    fetch_commands(&mut entries);
     entries
 }
 
@@ -41,6 +43,7 @@ fn parse_lsof_line(line: &str) -> Option<PortEntry> {
         process_name,
         port,
         address,
+        command: String::new(),
     })
 }
 
@@ -58,6 +61,41 @@ fn parse_addr_port(s: &str) -> Option<(String, u16)> {
     let addr = s[..colon].to_string();
     let port = s[colon + 1..].parse().ok()?;
     Some((addr, port))
+}
+
+fn fetch_commands(entries: &mut [PortEntry]) {
+    if entries.is_empty() {
+        return;
+    }
+
+    let pids: Vec<String> = entries.iter().map(|e| e.pid.to_string()).collect();
+    let Ok(output) = Command::new("ps")
+        .args(["-ww", "-p", &pids.join(","), "-o", "pid=,command="])
+        .output()
+    else {
+        return;
+    };
+
+    if !output.status.success() {
+        return;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut cmd_map = std::collections::HashMap::new();
+    for line in stdout.lines() {
+        let trimmed = line.trim_start();
+        if let Some((pid_str, cmd)) = trimmed.split_once(char::is_whitespace)
+            && let Ok(pid) = pid_str.parse::<u32>()
+        {
+            cmd_map.insert(pid, cmd.trim_start().to_string());
+        }
+    }
+    for entry in entries.iter_mut() {
+        if let Some(cmd) = cmd_map.remove(&entry.pid) {
+            entry.command = cmd;
+        }
+    }
 }
 
 pub fn kill_process(pid: u32, force: bool) -> bool {
@@ -115,6 +153,7 @@ mod tests {
         assert_eq!(entry.pid, 1234);
         assert_eq!(entry.address, "127.0.0.1");
         assert_eq!(entry.port, 3000);
+        assert_eq!(entry.command, "");
     }
 
     #[test]
