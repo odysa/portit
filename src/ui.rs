@@ -23,7 +23,7 @@ pub fn render(w: &mut impl Write, app: &App) -> io::Result<()> {
     let (cols, _) = terminal::size()?;
     let cols = cols as usize;
 
-    if cols < 40 {
+    if cols < FIXED_W + 8 {
         return Ok(());
     }
 
@@ -163,7 +163,6 @@ fn render_row_line(w: &mut impl Write, cols: usize, line: &str, selected: bool) 
             SetAttribute(Attribute::Reverse),
             Print(pad_line(line, cols)),
             SetAttribute(Attribute::Reset),
-            ResetColor,
         )?;
     } else {
         queue!(w, Print(pad_line(line, cols)))?;
@@ -225,7 +224,61 @@ fn render_confirm_popup(
         Print(format!("\u{2502}{msg}\u{2502}")),
         cursor::MoveTo(layout.x, layout.y + 2),
         Print(popup_bottom(&layout.h_bar)),
-        ResetColor,
+        SetAttribute(Attribute::Reset),
+    )
+}
+
+fn render_action_popup(
+    w: &mut impl Write,
+    cols: usize,
+    sel_y: usize,
+    menu: &ActionMenu,
+) -> io::Result<()> {
+    let inner_w = ACTIONS.iter().map(|a| a.len() + 4).max().unwrap_or(16);
+    let layout = popup_layout(cols, sel_y, inner_w);
+
+    queue!(
+        w,
+        cursor::MoveTo(layout.x, layout.y),
+        SetForegroundColor(Color::Cyan),
+        SetBackgroundColor(Color::Black),
+        Print(popup_top(&layout.h_bar)),
+    )?;
+
+    for (i, action) in ACTIONS.iter().enumerate() {
+        let marker = if i == menu.selected {
+            "\u{25b8} "
+        } else {
+            "  "
+        };
+        queue!(w, cursor::MoveTo(layout.x, layout.y + 1 + i as u16))?;
+        if i == menu.selected {
+            queue!(
+                w,
+                Print("\u{2502}"),
+                SetForegroundColor(Color::Black),
+                SetBackgroundColor(Color::Cyan),
+                Print(format!(" {marker}{:<w$}", action, w = inner_w - 4)),
+                SetForegroundColor(Color::Cyan),
+                SetBackgroundColor(Color::Black),
+                Print(" \u{2502}"),
+            )?;
+        } else {
+            queue!(
+                w,
+                Print(format!(
+                    "\u{2502} {marker}{:<w$} \u{2502}",
+                    action,
+                    w = inner_w - 4
+                )),
+            )?;
+        }
+    }
+
+    queue!(
+        w,
+        cursor::MoveTo(layout.x, layout.y + 1 + ACTIONS.len() as u16),
+        Print(popup_bottom(&layout.h_bar)),
         SetAttribute(Attribute::Reset),
     )
 }
@@ -310,60 +363,4 @@ mod tests {
         assert_eq!(popup_top(bar), "\u{250c}\u{2500}\u{2500}\u{2500}\u{2510}");
         assert_eq!(popup_bottom(bar), "\u{2514}\u{2500}\u{2500}\u{2500}\u{2518}");
     }
-}
-
-fn render_action_popup(
-    w: &mut impl Write,
-    cols: usize,
-    sel_y: usize,
-    menu: &ActionMenu,
-) -> io::Result<()> {
-    let inner_w = ACTIONS.iter().map(|a| a.len() + 4).max().unwrap_or(16);
-    let layout = popup_layout(cols, sel_y, inner_w);
-
-    queue!(
-        w,
-        cursor::MoveTo(layout.x, layout.y),
-        SetForegroundColor(Color::Cyan),
-        SetBackgroundColor(Color::Black),
-        Print(popup_top(&layout.h_bar)),
-    )?;
-
-    for (i, action) in ACTIONS.iter().enumerate() {
-        let marker = if i == menu.selected {
-            "\u{25b8} "
-        } else {
-            "  "
-        };
-        queue!(w, cursor::MoveTo(layout.x, layout.y + 1 + i as u16))?;
-        if i == menu.selected {
-            queue!(
-                w,
-                Print("\u{2502}"),
-                SetForegroundColor(Color::Black),
-                SetBackgroundColor(Color::Cyan),
-                Print(format!(" {marker}{:<w$}", action, w = inner_w - 4)),
-                SetForegroundColor(Color::Cyan),
-                SetBackgroundColor(Color::Black),
-                Print(" \u{2502}"),
-            )?;
-        } else {
-            queue!(
-                w,
-                Print(format!(
-                    "\u{2502} {marker}{:<w$} \u{2502}",
-                    action,
-                    w = inner_w - 4
-                )),
-            )?;
-        }
-    }
-
-    queue!(
-        w,
-        cursor::MoveTo(layout.x, layout.y + 1 + ACTIONS.len() as u16),
-        Print(popup_bottom(&layout.h_bar)),
-        ResetColor,
-        SetAttribute(Attribute::Reset),
-    )
 }
