@@ -37,7 +37,13 @@ cargo run --release
 
 ## Install
 
-### Cargo (after publishing to crates.io)
+### Shell
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/odysa/portit/main/install.sh | sh
+```
+
+### Cargo
 
 ```bash
 cargo install portit
