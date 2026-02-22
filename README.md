@@ -2,6 +2,8 @@
 
 `portit` is a small terminal UI for listing listening TCP ports and killing the owning process.
 
+![demo](static/demo.gif)
+
 ## Features
 
 - Lists listening TCP ports from `lsof`

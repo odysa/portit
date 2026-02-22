@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyEventKind};
-use crossterm::{cursor, terminal};
+use crossterm::{cursor, execute, terminal};
 
 use crate::ports::{self, PortEntry};
 use crate::ui;
@@ -29,6 +29,7 @@ pub struct App {
     pub confirm_kill: Option<(u32, String)>,
     pub confirm_force: bool,
     pub action_menu: Option<ActionMenu>,
+    pub status_msg: Option<String>,
     pub start_row: u16,
     pub height: usize,
     pub visible_rows: usize,
@@ -49,6 +50,7 @@ impl App {
             confirm_kill: None,
             confirm_force: false,
             action_menu: None,
+            status_msg: None,
             start_row: 0,
             height: 0,
             visible_rows: 0,
@@ -61,10 +63,12 @@ impl App {
         while !self.should_quit {
             ui::render(w, self)?;
             if event::poll(Duration::from_millis(250))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press {
+                match event::read()? {
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
                         self.handle_key(key.code);
                     }
+                    Event::Resize(_, h) => self.recalc_layout(h as usize),
+                    _ => {}
                 }
             }
         }
@@ -73,12 +77,8 @@ impl App {
 
     fn setup_display(&mut self, w: &mut impl Write) -> io::Result<()> {
         let (_, term_rows) = terminal::size()?;
-        let max_table = ((term_rows as usize) / 2).clamp(3, 20);
-        let table_rows = self.filtered_entries.len().min(max_table).max(1);
-        self.height = (table_rows + 3).min(term_rows as usize);
-        self.visible_rows = self.height.saturating_sub(3);
+        self.recalc_layout(term_rows as usize);
 
-        // Reserve space by scrolling.
         for _ in 0..self.height {
             write!(w, "\r\n")?;
         }
@@ -88,6 +88,22 @@ impl App {
         self.start_row = (cur_y + 1).saturating_sub(self.height as u16);
 
         Ok(())
+    }
+
+    fn recalc_layout(&mut self, term_rows: usize) {
+        let max_table = (term_rows / 2).clamp(3, 20);
+        let table_rows = self.filtered_entries.len().min(max_table).max(1);
+        self.height = (table_rows + 3).min(term_rows);
+        self.visible_rows = self.height.saturating_sub(3);
+    }
+
+    pub fn install_panic_hook() {
+        let default = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let _ = terminal::disable_raw_mode();
+            let _ = execute!(io::stdout(), cursor::Show);
+            default(info);
+        }));
     }
 }
 

@@ -7,6 +7,7 @@ use std::io;
 use crossterm::{cursor, execute, terminal};
 
 fn main() -> io::Result<()> {
+    app::App::install_panic_hook();
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, cursor::Hide)?;

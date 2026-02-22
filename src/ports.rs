@@ -20,19 +20,20 @@ pub fn list_listening_ports() -> Vec<PortEntry> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut entries: Vec<PortEntry> = stdout.lines().skip(1).filter_map(parse_lsof_line).collect();
 
-    entries.sort_by_key(|e| e.port);
+    entries.sort_by_key(|e| (e.pid, e.port));
     entries.dedup_by(|a, b| a.pid == b.pid && a.port == b.port);
+    entries.sort_by_key(|e| e.port);
     entries
 }
 
 fn parse_lsof_line(line: &str) -> Option<PortEntry> {
-    let mut fields = line.split_whitespace();
-    let process_name = fields.next()?.to_string();
-    let pid: u32 = fields.next()?.parse().ok()?;
-
-    let mut rev = line.split_whitespace().rev();
-    let _listen_state = rev.next()?;
-    let addr_port = rev.next()?;
+    let fields: Vec<&str> = line.split_whitespace().collect();
+    if fields.len() < 10 {
+        return None;
+    }
+    let process_name = fields[0].to_string();
+    let pid: u32 = fields[1].parse().ok()?;
+    let addr_port = fields[fields.len() - 2];
     let (address, port) = parse_addr_port(addr_port)?;
 
     Some(PortEntry {

@@ -8,7 +8,7 @@ use crossterm::{
     terminal::{self, Clear, ClearType},
 };
 
-use crate::app::{ACTIONS, App};
+use crate::app::{ACTIONS, ActionMenu, App};
 
 const PID_W: usize = 8;
 const PROTO_W: usize = 6;
@@ -47,7 +47,9 @@ pub fn render(w: &mut impl Write, app: &App) -> io::Result<()> {
 }
 
 fn render_header(w: &mut impl Write, cols: usize, app: &App) -> io::Result<()> {
-    let title = if app.filter_mode {
+    let title = if let Some(msg) = &app.status_msg {
+        format!(" portit \u{2014} {}", msg)
+    } else if app.filter_mode {
         format!(" portit \u{2014} filter: {}\u{258c}", app.filter)
     } else if !app.filter.is_empty() {
         format!(" portit \u{2014} filter: [{}]", app.filter)
@@ -110,12 +112,7 @@ fn render_rows(w: &mut impl Write, cols: usize, proc_w: usize, app: &App) -> io:
 
 fn render_footer(w: &mut impl Write, cols: usize, app: &App) -> io::Result<()> {
     queue!(w, Clear(ClearType::CurrentLine))?;
-
-    let text = if app.filter_mode {
-        FILTER_HELP
-    } else {
-        MAIN_HELP
-    };
+    let text = if app.filter_mode { FILTER_HELP } else { MAIN_HELP };
     render_status_line(w, cols, text)
 }
 
@@ -132,12 +129,16 @@ fn format_row(pid: &str, proc: &str, proto: &str, addr: &str, port: &str, proc_w
 }
 
 fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max { s } else { &s[..max] }
+    match s.char_indices().nth(max) {
+        Some((i, _)) => &s[..i],
+        None => s,
+    }
 }
 
 fn pad_line(s: &str, width: usize) -> String {
-    if s.len() >= width {
-        s[..width].to_string()
+    let char_count = s.chars().count();
+    if char_count >= width {
+        truncate(s, width).to_string()
     } else {
         format!("{s:<width$}")
     }
@@ -222,7 +223,7 @@ fn render_action_popup(
     w: &mut impl Write,
     cols: usize,
     sel_y: usize,
-    menu: &crate::app::ActionMenu,
+    menu: &ActionMenu,
 ) -> io::Result<()> {
     let inner_w = ACTIONS.iter().map(|a| a.len() + 4).max().unwrap_or(16);
     let layout = popup_layout(cols, sel_y, inner_w);

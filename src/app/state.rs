@@ -50,7 +50,10 @@ impl App {
             self.entries
                 .iter()
                 .enumerate()
-                .filter(|(_, entry)| entry_matches_query(entry, &query))
+                .filter(|(_, e)| {
+                    e.process_name.to_ascii_lowercase().contains(&query)
+                        || e.port.to_string().contains(&query)
+                })
                 .map(|(i, _)| i)
                 .collect()
         };
@@ -67,20 +70,4 @@ impl App {
         let idx = self.filtered_entries.get(self.selected)?;
         self.entries.get(*idx)
     }
-}
-
-fn entry_matches_query(entry: &PortEntry, query: &str) -> bool {
-    contains_ascii_case_insensitive(&entry.process_name, query)
-        || entry.port.to_string().contains(query)
-}
-
-fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return needle.is_empty();
-    }
-
-    haystack
-        .as_bytes()
-        .windows(needle.len())
-        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }

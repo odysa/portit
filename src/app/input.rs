@@ -6,6 +6,8 @@ use super::{ACTIONS, ActionMenu, App, cycle_index};
 
 impl App {
     pub(super) fn handle_key(&mut self, code: KeyCode) {
+        self.status_msg = None;
+
         if self.confirm_kill.is_some() {
             self.handle_confirm(code);
             return;
@@ -70,8 +72,13 @@ impl App {
     fn handle_confirm(&mut self, code: KeyCode) {
         match code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
-                if let Some((pid, _)) = self.confirm_kill.take() {
-                    ports::kill_process(pid, self.confirm_force);
+                if let Some((pid, name)) = self.confirm_kill.take() {
+                    if ports::kill_process(pid, self.confirm_force) {
+                        self.status_msg = Some(format!("Killed {} (PID {})", name, pid));
+                    } else {
+                        self.status_msg =
+                            Some(format!("Failed to kill {} (PID {})", name, pid));
+                    }
                     self.confirm_force = false;
                     self.refresh();
                 }
