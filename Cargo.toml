@@ -8,7 +8,7 @@ repository = "https://github.com/odysa/portit"
 readme = "README.md"
 
 [dependencies]
-crossterm = { version = "0.28", default-features = false, features = ["events"] }
+crossterm = { version = "0.28", default-features = false, features = ["events", "use-dev-tty"] }
 
 [profile.release]
 opt-level = "z"
