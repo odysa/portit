@@ -8,7 +8,7 @@ portit
 
 A minimal Rust TUI for inspecting listening TCP ports and killing processes.
 
-**~283KB** release binary. Single dependency (`crossterm`). No runtime overhead.
+**~168KB** release binary. Single dependency (`crossterm`). No runtime overhead.
 
 ![demo](static/demo.gif)
 
