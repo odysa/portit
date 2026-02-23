@@ -1,6 +1,6 @@
 [package]
 name = "portit"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 description = "A minimal TUI for inspecting listening TCP ports and killing processes."
 license = "MIT"
