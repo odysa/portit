@@ -25,6 +25,11 @@ A minimal Rust TUI for inspecting listening TCP ports and killing processes.
 
 ## Installation
 
+### Homebrew
+```bash
+brew install odysa/tap/portit
+```
+
 ### Using install script
 ```bash
 curl -fsSL https://raw.githubusercontent.com/odysa/portit/main/install.sh | sh
