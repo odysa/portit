@@ -71,3 +71,71 @@ jobs:
         run: cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          echo "aarch64_mac=$(shasum -a 256 portit-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "x86_64_mac=$(shasum -a 256 portit-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "x86_64_linux=$(shasum -a 256 portit-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula
+        uses: actions/checkout@v4
+        with:
+          repository: odysa/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Write formula
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          A="${{ steps.sha.outputs.aarch64_mac }}"
+          X="${{ steps.sha.outputs.x86_64_mac }}"
+          L="${{ steps.sha.outputs.x86_64_linux }}"
+          {
+            echo 'class Portit < Formula'
+            echo '  desc "A minimal TUI for inspecting listening TCP ports and killing processes"'
+            echo '  homepage "https://github.com/odysa/portit"'
+            echo "  version \"$V\""
+            echo '  license "MIT"'
+            echo ''
+            echo '  on_macos do'
+            echo '    on_arm do'
+            echo "      url \"https://github.com/odysa/portit/releases/download/v$V/portit-aarch64-apple-darwin.tar.gz\""
+            echo "      sha256 \"$A\""
+            echo '    end'
+            echo '    on_intel do'
+            echo "      url \"https://github.com/odysa/portit/releases/download/v$V/portit-x86_64-apple-darwin.tar.gz\""
+            echo "      sha256 \"$X\""
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  on_linux do'
+            echo '    on_intel do'
+            echo "      url \"https://github.com/odysa/portit/releases/download/v$V/portit-x86_64-unknown-linux-gnu.tar.gz\""
+            echo "      sha256 \"$L\""
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  def install'
+            echo '    bin.install "portit"'
+            echo '  end'
+            echo 'end'
+          } > homebrew-tap/Formula/portit.rb
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/portit.rb
+          git commit -m "Update portit to ${GITHUB_REF_NAME}"
+          git push
